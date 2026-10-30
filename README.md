@@ -1,46 +1,52 @@
 # Team API
 
-基于 [Sub2API](https://github.com/Wei-Shaw/sub2api) 的团队内部 API 网关部署配置。
-成员人数不固定，每位成员使用独立用户和 Key；不内置 GPT 账号、OAuth 凭据或真实 API Key。
+基于 Sub2API 的内部 API 网关，成员人数不固定。
 
-## 服务器部署
+## 启动
 
-准备 Docker Engine、Docker Compose v2+ 和 Python 3.9+，然后在仓库根目录执行：
+需要 Docker、Docker Compose v2+ 和 Python 3.9+。在仓库根目录执行：
 
 ```sh
 python3 team/team.py init --admin-email 你的管理员邮箱
-python3 team/team.py validate
 python3 team/team.py start
-python3 team/team.py check
 ```
 
-Windows 使用 `python` 替换 `python3`，并先启动 Docker Desktop。
+Windows 将 `python3` 换成 `python`，并先启动 Docker Desktop。
 
-初始只监听本机 `127.0.0.1:8080`，服务器可通过 SSH 隧道访问：
+默认访问 `http://localhost:8080`。管理员邮箱和随机密码保存在本地 `team/.env`。
+服务器部署时重新执行 init 生成自己的密码；重复 init 不覆盖现有配置。
 
-```sh
-ssh -L 8080:127.0.0.1:8080 你的服务器用户名@服务器地址
-```
+## 配置
 
-浏览器打开 `http://localhost:8080`，从服务器本地的 `team/.env` 获取管理员密码。
-首次登录如出现项目自身的使用确认，由管理员阅读并完成，然后执行：
+编辑 `team/.env`，修改后重新执行 start：
+
+| 参数 | 默认值 | 用途 |
+|---|---|---|
+| `BIND_HOST` | `127.0.0.1` | 监听地址；内网直接访问时可改为服务器内网 IPv4 地址或 `0.0.0.0` |
+| `SERVER_PORT` | `8080` | 访问端口 |
+| `DEFAULT_USER_CONCURRENCY` | `1` | 新成员默认并发；已有用户在后台调整 |
+| `RUN_MODE` | `simple` | 内部简易模式，跳过站内余额扣费 |
+| `SUB2API_IMAGE` | `ghcr.io/wei-shaw/sub2api:0.2.19` | 运行的应用镜像 |
+
+后台接入 OpenAI 上游账号并完成授权，将账号绑定到 OpenAI 分组；按需创建成员，每人生成独立 Key 并选择对应分组。
+客户端填写 `http://服务器地址:端口/v1` 和该成员的 Key，模型名称按账号实际支持填写。
+
+可在后台自行调整站点设置；也可完成首次登录确认后执行以下命令，设置站点名称、关闭公开注册和支付入口：
 
 ```sh
 python3 team/team.py configure
 ```
 
-这会设置站点名称、关闭公开注册和支付入口，默认每位新成员并发为 1。不会限制成员总数。
+默认只监听本机；通过反向代理开放时配置 HTTPS，或通过内网访问并限制来源。数据库和 Redis 不对外发布端口。
+账号、授权、密码和数据不进入仓库。管理员初始密码只在首次建库时生效，之后请在后台修改。
 
-接下来由账号持有人在后台接入上游账号，将它绑定到 OpenAI 分组，先设账号总并发为 2，测试后调整。
-管理员为成员新增用户，成员创建独立 Key 并选择对应 OpenAI 分组。真实模型调用必须等上游授权后验证。
+## 常用命令
 
-完整的服务器交接、内网接入和备份说明见 [team/README.md](team/README.md)。
-上游原始说明见 [README.upstream.md](README.upstream.md) 和 [README_CN.md](README_CN.md)。
+```sh
+python3 team/team.py status    # 查看服务状态
+python3 team/team.py logs      # 查看应用日志
+python3 team/team.py check     # 检查后台登录和服务，不调用上游模型
+python3 team/team.py stop      # 停止服务，保留数据
+```
 
-## 来源与许可
-
-本仓库保留 Sub2API 源码快照、版权声明和 [LGPL-3.0 许可证](LICENSE)。
-来源提交：`d851a38`（2026-10-30 拉取）；默认运行上游正式发布镜像 `ghcr.io/wei-shaw/sub2api:0.2.19`。
-部署配置没有修改模型请求逻辑。上游服务的账号授权和使用条件仍然适用。
-
-部署验证记录见 [team/VERIFICATION.md](team/VERIFICATION.md)。上游原始工作流全部保留；本仓库新增团队部署配置检查。
+来源：[Sub2API](https://github.com/Wei-Shaw/sub2api)，保留上游源码与 [LGPL-3.0 许可](LICENSE)。
