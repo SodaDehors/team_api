@@ -1,0 +1,9 @@
+.env
+.private/
+__pycache__/
+*.pyc
+*.backup
+*.sql
+*.dump
+*.tar
+*.tar.gz

@@ -1,0 +1,98 @@
+name: ${COMPOSE_PROJECT_NAME:-team_api}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  sub2api:
+    image: ${SUB2API_IMAGE:-ghcr.io/wei-shaw/sub2api:0.2.19}
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${SERVER_PORT:-8080}:8080"
+    volumes:
+      - app_data:/app/data
+    environment:
+      AUTO_SETUP: "true"
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      SERVER_MODE: release
+      RUN_MODE: ${RUN_MODE:-simple}
+      SIMPLE_MODE_AUTO_CREATE_DEFAULT_GROUPS: ${SIMPLE_MODE_AUTO_CREATE_DEFAULT_GROUPS:-true}
+      SIMPLE_MODE_KEY_RATE_LIMIT_ENABLED: ${SIMPLE_MODE_KEY_RATE_LIMIT_ENABLED:-true}
+      DEFAULT_USER_CONCURRENCY: ${DEFAULT_USER_CONCURRENCY:-1}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_USER: ${POSTGRES_USER:-team_api}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Run team.py init first}
+      DATABASE_DBNAME: ${POSTGRES_DB:-team_api}
+      DATABASE_SSLMODE: disable
+      DATABASE_MAX_OPEN_CONNS: "20"
+      DATABASE_MAX_IDLE_CONNS: "5"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run team.py init first}
+      REDIS_POOL_SIZE: "32"
+      REDIS_MIN_IDLE_CONNS: "2"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Run team.py init first}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Run team.py init first}
+      JWT_SECRET: ${JWT_SECRET:?Run team.py init first}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?Run team.py init first}
+      TZ: ${TZ:-Asia/Shanghai}
+      SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP: "false"
+      SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS: "false"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 120s
+    logging: *logging
+
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-team_api}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run team.py init first}
+      POSTGRES_DB: ${POSTGRES_DB:-team_api}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run team.py init first}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?Run team.py init first}
+      TZ: ${TZ:-Asia/Shanghai}
+    command:
+      - /bin/sh
+      - -ec
+      - 'exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$REDIS_PASSWORD"'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+volumes:
+  app_data:
+  postgres_data:
+  redis_data:

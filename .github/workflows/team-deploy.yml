@@ -1,0 +1,28 @@
+name: Team deployment configuration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Python syntax
+        run: python3 -c "import ast, pathlib; ast.parse(pathlib.Path('team/team.py').read_text())"
+      - name: Generate temporary credentials and validate Compose
+        run: |
+          python3 team/team.py init
+          before=$(sha256sum team/.env)
+          python3 team/team.py init
+          after=$(sha256sum team/.env)
+          test "$before" = "$after"
+          git check-ignore team/.env
+          python3 team/team.py validate
